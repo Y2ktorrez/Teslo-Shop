@@ -1,7 +1,8 @@
-import { HttpException, HttpStatus, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException, Logger, OnModuleInit } from '@nestjs/common';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { PrismaClient } from '@prisma/client';
+import { PaginationDto } from 'src/common';
 
 @Injectable()
 export class ProductsService extends PrismaClient implements OnModuleInit {
@@ -12,32 +13,89 @@ export class ProductsService extends PrismaClient implements OnModuleInit {
     this.logger.log(`Database connected`);
   }
 
-
+  //N2.- Crear un Producto
   async create(createProductDto: CreateProductDto) {
     try {
-      const newProduct = await this.product.create({
+      /* Generador de Slug Automatico */
+      if (!createProductDto.slug) {
+        createProductDto.slug = createProductDto.title
+          .toLowerCase()
+          .replaceAll(' ','_')
+          .replaceAll("'",'')
+      }else{
+        createProductDto.slug = createProductDto.slug
+        .toLocaleLowerCase()
+        .replaceAll('','_')
+        .replaceAll("'",'')
+      }
+
+      const product = await this.product.create({
         data: createProductDto,
       });
-      return newProduct;
+      return product;
     } catch (error) {
-      this.logger.error(`Error creating product: ${error.message}`);
-      throw new HttpException('Error creating product', HttpStatus.INTERNAL_SERVER_ERROR);
+      this.handleDBExceptions(error);
+    } 
+  }
+
+  async findAll(paginationDto: PaginationDto) {
+    const {page, limit} = paginationDto;
+    const totalPages = await this.product.count();
+    const lastPage = Math.ceil(totalPages/limit);
+    return{
+      data: await this.product.findMany({
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      meta: {
+        total: totalPages,
+        page: page,
+        lastPage: lastPage
+      }
     }
   }
 
-  findAll() {
-    return `This action returns all products`;
+  async findOne(id: number) {
+    const product = await this.product.findFirst({
+      where: {id}
+    });
+    if(!product){
+      throw new BadRequestException(`El producto con el id ${id} no existe`);
+    }
+    return product;
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} product`;
+  async findOneSlug(slug: string) {
+    const product = await this.product.findFirst({
+      where: {slug}
+    });
+    if(!product){
+      throw new BadRequestException(`El producto con el id ${slug} no existe`);
+    }
+    return product;
   }
 
-  update(id: number, updateProductDto: UpdateProductDto) {
-    return `This action updates a #${id} product`;
+  async update(id: number, updateProductDto: UpdateProductDto) {
+    await this.findOne(id);
+    return this.product.update({
+      where: {id},
+      data: updateProductDto
+    });
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} product`;
+  async remove(id: number) {
+    await this.findOne(id);
+    return this.product.delete({
+      where: {id}
+    })
   }
+
+  //N3. Manejo de Errores
+  private handleDBExceptions(error: any){
+    if(error.code === '23505')
+      throw new BadRequestException(error.detail);
+    this.logger.error(error);
+    throw new InternalServerErrorException('Unexpected error, check server logs');
+  }
+
 }

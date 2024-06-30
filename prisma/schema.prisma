@@ -22,4 +22,5 @@ model Product {
   stock       Int?
   sizes       String[]
   gender      String?
+  tags        String[]
 }

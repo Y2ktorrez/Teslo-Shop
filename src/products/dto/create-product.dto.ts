@@ -1,7 +1,7 @@
 import { Type } from "class-transformer";
 import { IsArray, IsIn, IsInt, IsNumber, IsOptional, IsPositive, IsString, Min, MinLength } from "class-validator";
 
-
+//N1. DTO
 export class CreateProductDto {
 
   @IsString()
@@ -40,5 +40,10 @@ export class CreateProductDto {
 
   @IsIn(['men', 'women', 'kid', 'unisex'])
   public gender: string;
+
+  @IsString({each: true})
+  @IsArray()
+  @IsOptional()
+  public tags: string[]
 
 }
